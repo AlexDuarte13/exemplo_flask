@@ -1,5 +1,6 @@
-from flask import Flask, render_template, url_for, request, session, redirect
+from flask import Flask, render_template, url_for, request, session, redirect, Response, jsonify
 from flask_pymongo import PyMongo
+from functools import wraps
 import bcrypt
 
 #Install Flask
@@ -20,6 +21,21 @@ app.config['MONGO_URI'] = 'mongodb://localhost:27017/fotografia'
 
 mongo = PyMongo(app)
 
+def authenticate(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        token = request.headers.environ['HTTP_AUTHORIZATION']
+        if token is not None:
+            if token == 'teste_jwt':
+                return f(*args, **kwargs)
+            else:
+                retorno = ['mensagem', 'nao autorizado']
+
+                return Response(jsonify(retorno), 401, {'WWW-Authenticate': 'Basic realm="Login!"'})
+        else:
+            return Response('Login!', 403, {'WWW-Authenticate': 'Basic realm="Login!"'})
+    return wrapper
+
 @app.route('/')
 def index():
     if 'username' in session:
@@ -38,6 +54,7 @@ def login():
     return 'Invalid username/password combination'
 
 @app.route('/register', methods=['POST', 'GET'])
+@authenticate
 def register():
     if request.method == 'POST':
         users = mongo.db.users
@@ -45,9 +62,9 @@ def register():
         print(existing_user)
 
         if existing_user is None:
-            hashpass = bcrypt.hashpw(request.form['pass'].encode('utf-8'), bcrypt.gensalt())
-            users.insert({'name' : request.form['username'], 'password' : hashpass})
-            session['username'] = request.form['username']
+            #hashpass = bcrypt.hashpw(request.form['pass'].encode('utf-8'), bcrypt.gensalt())
+            #users.insert({'name' : request.form['username'], 'password' : hashpass})
+            #session['username'] = request.form['username']
             return redirect(url_for('index'))
         
         return 'That username already exists!'
